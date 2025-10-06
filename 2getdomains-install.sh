@@ -8,19 +8,7 @@ check_repo() {
 }
 
 route_vpn () {
-    if [ "$TUNNEL" == wg ]; then
-cat << EOF > /etc/hotplug.d/iface/30-vpnroute
-#!/bin/sh
-
-ip route add table vpn default dev wg0
-EOF
-    elif [ "$TUNNEL" == awg ]; then
-cat << EOF > /etc/hotplug.d/iface/30-vpnroute
-#!/bin/sh
-
-ip route add table vpn default dev awg0
-EOF
-    elif [ "$TUNNEL" == singbox ] || [ "$TUNNEL" == ovpn ] || [ "$TUNNEL" == tun2socks ]; then
+    if[ "$TUNNEL" == singbox ]; then
 cat << EOF > /etc/hotplug.d/iface/30-vpnroute
 #!/bin/sh
 
@@ -49,55 +37,19 @@ add_mark() {
 add_tunnel() {
     echo "We can automatically configure only Wireguard and Amnezia WireGuard. OpenVPN, Sing-box(Shadowsocks2022, VMess, VLESS, etc) and tun2socks will need to be configured manually"
     echo "Select a tunnel:"
-    echo "1) WireGuard"
-    echo "2) OpenVPN"
-    echo "3) Sing-box"
-    echo "4) tun2socks"
-    echo "5) wgForYoutube"
-    echo "6) Amnezia WireGuard"
-    echo "7) Amnezia WireGuard For Youtube"
-    echo "8) Skip this step"
+    echo "1) Sing-box"
+    echo "3) Skip this step"
 
     while true; do
     read -r -p '' TUNNEL
         case $TUNNEL in 
 
         1) 
-            TUNNEL=wg
-            break
-            ;;
-
-        2)
-            TUNNEL=ovpn
-            break
-            ;;
-
-        3) 
             TUNNEL=singbox
             break
             ;;
 
-        4) 
-            TUNNEL=tun2socks
-            break
-            ;;
-
-        5) 
-            TUNNEL=wgForYoutube
-            break
-            ;;
-
-        6) 
-            TUNNEL=awg
-            break
-            ;;
-
-        7) 
-            TUNNEL=awgForYoutube
-            break
-            ;;
-
-        8)
+        3)
             echo "Skip"
             TUNNEL=0
             break
@@ -108,70 +60,6 @@ add_tunnel() {
             ;;
         esac
     done
-
-    if [ "$TUNNEL" == 'wg' ]; then
-        printf "\033[32;1mConfigure WireGuard\033[0m\n"
-        if opkg list-installed | grep -q wireguard-tools; then
-            echo "Wireguard already installed"
-        else
-            echo "Installed wg..."
-            opkg install wireguard-tools
-        fi
-
-        route_vpn
-
-        read -r -p "Enter the private key (from [Interface]):"$'\n' WG_PRIVATE_KEY
-
-        while true; do
-            read -r -p "Enter internal IP address with subnet, example 192.168.100.5/24 (from [Interface]):"$'\n' WG_IP
-            if echo "$WG_IP" | egrep -oq '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]+$'; then
-                break
-            else
-                echo "This IP is not valid. Please repeat"
-            fi
-        done
-
-        read -r -p "Enter the public key (from [Peer]):"$'\n' WG_PUBLIC_KEY
-        read -r -p "If use PresharedKey, Enter this (from [Peer]). If your don't use leave blank:"$'\n' WG_PRESHARED_KEY
-        read -r -p "Enter Endpoint host without port (Domain or IP) (from [Peer]):"$'\n' WG_ENDPOINT
-
-        read -r -p "Enter Endpoint host port (from [Peer]) [51820]:"$'\n' WG_ENDPOINT_PORT
-        WG_ENDPOINT_PORT=${WG_ENDPOINT_PORT:-51820}
-        if [ "$WG_ENDPOINT_PORT" = '51820' ]; then
-            echo $WG_ENDPOINT_PORT
-        fi
-        
-        uci set network.wg0=interface
-        uci set network.wg0.proto='wireguard'
-        uci set network.wg0.private_key=$WG_PRIVATE_KEY
-        uci set network.wg0.listen_port='51820'
-        uci set network.wg0.addresses=$WG_IP
-
-        if ! uci show network | grep -q wireguard_wg0; then
-            uci add network wireguard_wg0
-        fi
-        uci set network.@wireguard_wg0[0]=wireguard_wg0
-        uci set network.@wireguard_wg0[0].name='wg0_client'
-        uci set network.@wireguard_wg0[0].public_key=$WG_PUBLIC_KEY
-        uci set network.@wireguard_wg0[0].preshared_key=$WG_PRESHARED_KEY
-        uci set network.@wireguard_wg0[0].route_allowed_ips='0'
-        uci set network.@wireguard_wg0[0].persistent_keepalive='25'
-        uci set network.@wireguard_wg0[0].endpoint_host=$WG_ENDPOINT
-        uci set network.@wireguard_wg0[0].allowed_ips='0.0.0.0/0'
-        uci set network.@wireguard_wg0[0].endpoint_port=$WG_ENDPOINT_PORT
-        uci commit
-    fi
-
-    if [ "$TUNNEL" == 'ovpn' ]; then
-        if opkg list-installed | grep -q openvpn-openssl; then
-            echo "OpenVPN already installed"
-        else
-            echo "Installed openvpn"
-            opkg install openvpn-openssl
-        fi
-        printf "\033[32;1mConfigure route for OpenVPN\033[0m\n"
-        route_vpn
-    fi
 
     if [ "$TUNNEL" == 'singbox' ]; then
         if opkg list-installed | grep -q sing-box; then
@@ -196,34 +84,78 @@ add_tunnel() {
         printf "\033[32;1mConfig /etc/sing-box/config.json already exists\033[0m\n"
         else
 cat << 'EOF' > /etc/sing-box/config.json
+#{
+#  "log": {
+#    "level": "debug"
+#  },
+#  "inbounds": [
+#    {
+#      "type": "tun",
+#      "interface_name": "tun0",
+#      "domain_strategy": "ipv4_only",
+#      "address": ["172.16.250.1/30"],
+#      "auto_route": false,
+#      "strict_route": false,
+#      "sniff": true 
+#   }
+#  ],
+#  "outbounds": [
+#    {
+#      "type": "$TYPE",
+#      "server": "$HOST",
+#      "server_port": $PORT,
+#      "method": "$METHOD",
+#      "password": "$PASS"
+#    }
+#  ],
+#  "route": {
+#    "auto_detect_interface": true
+#  }
+#}
 {
-  "log": {
-    "level": "debug"
-  },
-  "inbounds": [
-    {
-      "type": "tun",
-      "interface_name": "tun0",
-      "domain_strategy": "ipv4_only",
-      "address": ["172.16.250.1/30"],
-      "auto_route": false,
-      "strict_route": false,
-      "sniff": true 
-   }
-  ],
-  "outbounds": [
-    {
-      "type": "$TYPE",
-      "server": "$HOST",
-      "server_port": $PORT,
-      "method": "$METHOD",
-      "password": "$PASS"
+    "log": {
+      "level": "debug"
+    },
+    "inbounds": [
+      {
+        "type": "tun",
+        "interface_name": "tun0",
+        "domain_strategy": "ipv4_only",
+        "address": [
+	  "172.16.250.1/30"
+	],
+        "auto_route": false,
+        "strict_route": false,
+        "sniff": true 
+     }
+    ],
+      "outbounds": [
+        {
+          "type": "vless",
+          "server": "$HOST",
+          "server_port": $PORT,
+          "uuid": "$UUID",
+          "flow": "xtls-rprx-vision",
+          "tls": {
+            "enabled": true,
+            "insecure": false,
+            "server_name": "$FAKE_SERVER",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "chrome"
+            },
+            "reality": {
+              "enabled": true,
+              "public_key": "$PUBLIC_KEY",
+              "short_id": "$SHORT_ID"
+            }
+          }
+        }
+      ],
+    "route": {
+      "auto_detect_interface": true
     }
-  ],
-  "route": {
-    "auto_detect_interface": true
   }
-}
 EOF
         printf "\033[32;1mCreate template config in /etc/sing-box/config.json. Edit it manually. Official doc: https://sing-box.sagernet.org/configuration/outbound/\033[0m\n"
         printf "\033[32;1mOfficial doc: https://sing-box.sagernet.org/configuration/outbound/\033[0m\n"
@@ -232,14 +164,6 @@ EOF
         fi
         printf "\033[32;1mConfigure route for Sing-box\033[0m\n"
         route_vpn
-    fi
-
-    if [ "$TUNNEL" == 'wgForYoutube' ]; then
-        add_internal_wg Wireguard
-    fi
-
-    if [ "$TUNNEL" == 'awgForYoutube' ]; then
-        add_internal_wg AmneziaWG
     fi
 
     if [ "$TUNNEL" == 'awg' ]; then
@@ -362,15 +286,6 @@ add_zone() {
             while uci -q delete firewall.@zone[$zone_tun_id]; do :; done
         fi
 
-        zone_wg_id=$(uci show firewall | grep -E '@zone.*wg0' | awk -F '[][{}]' '{print $2}' | head -n 1)
-        if [ "$zone_wg_id" == 0 ] || [ "$zone_wg_id" == 1 ]; then
-            printf "\033[32;1mwg0 zone has an identifier of 0 or 1. That's not ok. Fix your firewall. lan and wan zones should have identifiers 0 and 1. \033[0m\n"
-            exit 1
-        fi
-        if [ ! -z "$zone_wg_id" ]; then
-            while uci -q delete firewall.@zone[$zone_wg_id]; do :; done
-        fi
-
         zone_awg_id=$(uci show firewall | grep -E '@zone.*awg0' | awk -F '[][{}]' '{print $2}' | head -n 1)
         if [ "$zone_awg_id" == 0 ] || [ "$zone_awg_id" == 1 ]; then
             printf "\033[32;1mawg0 zone has an identifier of 0 or 1. That's not ok. Fix your firewall. lan and wan zones should have identifiers 0 and 1. \033[0m\n"
@@ -382,14 +297,12 @@ add_zone() {
 
         uci add firewall zone
         uci set firewall.@zone[-1].name="$TUNNEL"
-        if [ "$TUNNEL" == wg ]; then
-            uci set firewall.@zone[-1].network='wg0'
-        elif [ "$TUNNEL" == awg ]; then
+        if  [ "$TUNNEL" == awg ]; then
             uci set firewall.@zone[-1].network='awg0'
-        elif [ "$TUNNEL" == singbox ] || [ "$TUNNEL" == ovpn ] || [ "$TUNNEL" == tun2socks ]; then
+        elif [ "$TUNNEL" == singbox ]; then
             uci set firewall.@zone[-1].device='tun0'
         fi
-        if [ "$TUNNEL" == wg ] || [ "$TUNNEL" == awg ] || [ "$TUNNEL" == ovpn ] || [ "$TUNNEL" == tun2socks ]; then
+        if [ "$TUNNEL" == awg ]; then
             uci set firewall.@zone[-1].forward='REJECT'
             uci set firewall.@zone[-1].output='ACCEPT'
             uci set firewall.@zone[-1].input='REJECT'
@@ -411,18 +324,8 @@ add_zone() {
     else
         printf "\033[32;1mConfigured forwarding\033[0m\n"
         # Delete exists forwarding
-        if [[ $TUNNEL != "wg" ]]; then
-            forward_id=$(uci show firewall | grep -E "@forwarding.*dest='wg'" | awk -F '[][{}]' '{print $2}' | head -n 1)
-            remove_forwarding
-        fi
-
         if [[ $TUNNEL != "awg" ]]; then
             forward_id=$(uci show firewall | grep -E "@forwarding.*dest='awg'" | awk -F '[][{}]' '{print $2}' | head -n 1)
-            remove_forwarding
-        fi
-
-        if [[ $TUNNEL != "ovpn" ]]; then
-            forward_id=$(uci show firewall | grep -E "@forwarding.*dest='ovpn'" | awk -F '[][{}]' '{print $2}' | head -n 1)
             remove_forwarding
         fi
 
@@ -431,10 +334,6 @@ add_zone() {
             remove_forwarding
         fi
 
-        if [[ $TUNNEL != "tun2socks" ]]; then
-            forward_id=$(uci show firewall | grep -E "@forwarding.*dest='tun2socks'" | awk -F '[][{}]' '{print $2}' | head -n 1)
-            remove_forwarding
-        fi
 
         uci add firewall forwarding
         uci set firewall.@forwarding[-1]=forwarding
@@ -446,15 +345,15 @@ add_zone() {
     fi
 }
 
-show_manual() {
-    if [ "$TUNNEL" == tun2socks ]; then
-        printf "\033[42;1mZone for tun2socks cofigured. But you need to set up the tunnel yourself.\033[0m\n"
-        echo "Use this manual: https://cli.co/VNZISEM"
-    elif [ "$TUNNEL" == ovpn ]; then
-        printf "\033[42;1mZone for OpenVPN cofigured. But you need to set up the tunnel yourself.\033[0m\n"
-        echo "Use this manual: https://itdog.info/nastrojka-klienta-openvpn-na-openwrt/"
-    fi
-}
+#show_manual() {
+#    if [ "$TUNNEL" == tun2socks ]; then
+#        printf "\033[42;1mZone for tun2socks cofigured. But you need to set up the tunnel yourself.\033[0m\n"
+#        echo "Use this manual: https://cli.co/VNZISEM"
+#    elif [ "$TUNNEL" == ovpn ]; then
+#        printf "\033[42;1mZone for OpenVPN cofigured. But you need to set up the tunnel yourself.\033[0m\n"
+#        echo "Use this manual: https://itdog.info/nastrojka-klienta-openvpn-na-openwrt/"
+#    fi
+#}
 
 add_set() {
     if uci show firewall | grep -q "@ipset.*name='vpn_domains'"; then
@@ -576,7 +475,7 @@ add_dns_resolver() {
 }
 
 add_packages() {
-    for package in curl nano; do
+    for package in mc curl nano; do
         if opkg list-installed | grep -q "^$package "; then
             printf "\033[32;1m$package already installed\033[0m\n"
         else
@@ -589,7 +488,7 @@ add_packages() {
                 printf "\033[31;1mError: failed to install $package\033[0m\n"
                 exit 1
             fi
-        fi
+        fi    
     done
 }
 
@@ -598,7 +497,6 @@ add_getdomains() {
     echo "Select:"
     echo "1) Russia inside. You are inside Russia"
     echo "2) Russia outside. You are outside of Russia, but you need access to Russian resources"
-    echo "3) Ukraine. uablacklist.net list"
     echo "4) Skip script creation"
 
     while true; do
@@ -616,11 +514,6 @@ add_getdomains() {
             ;;
 
         3) 
-            COUNTRY=ukraine
-            break
-            ;;
-
-        4) 
             echo "Skiped"
             COUNTRY=0
             break
@@ -636,8 +529,6 @@ add_getdomains() {
         EOF_DOMAINS=DOMAINS=https://raw.githubusercontent.com/itdoginfo/allow-domains/main/Russia/inside-dnsmasq-nfset.lst
     elif [ "$COUNTRY" == 'russia_outside' ]; then
         EOF_DOMAINS=DOMAINS=https://raw.githubusercontent.com/itdoginfo/allow-domains/main/Russia/outside-dnsmasq-nfset.lst
-    elif [ "$COUNTRY" == 'ukraine' ]; then
-        EOF_DOMAINS=DOMAINS=https://raw.githubusercontent.com/itdoginfo/allow-domains/main/Ukraine/inside-dnsmasq-nfset.lst
     fi
 
     if [ "$COUNTRY" != '0' ]; then
@@ -690,20 +581,6 @@ EOF
 add_internal_wg() {
     PROTOCOL_NAME=$1
     printf "\033[32;1mConfigure ${PROTOCOL_NAME}\033[0m\n"
-    if [ "$PROTOCOL_NAME" = 'Wireguard' ]; then
-        INTERFACE_NAME="wg1"
-        CONFIG_NAME="wireguard_wg1"
-        PROTO="wireguard"
-        ZONE_NAME="wg_internal"
-
-        if opkg list-installed | grep -q wireguard-tools; then
-            echo "Wireguard already installed"
-        else
-            echo "Installed wg..."
-            opkg install wireguard-tools
-        fi
-    fi
-
     if [ "$PROTOCOL_NAME" = 'AmneziaWG' ]; then
         INTERFACE_NAME="awg1"
         CONFIG_NAME="amneziawg_awg1"
