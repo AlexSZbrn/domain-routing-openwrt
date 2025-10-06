@@ -8,7 +8,7 @@ check_repo() {
 }
 
 route_vpn () {
-    if [ "$TUNNEL" == singbox ]; then
+    if [ "$TUNNEL" = singbox ]; then
 cat << EOF > /etc/hotplug.d/iface/30-vpnroute
 #!/bin/sh
 
@@ -66,7 +66,7 @@ add_tunnel() {
             echo "Sing-box already installed"
         else
             AVAILABLE_SPACE=$(df / | awk 'NR>1 { print $4 }')
-            if  [[ "$AVAILABLE_SPACE" -gt 2000 ]]; then
+            if  [ "$AVAILABLE_SPACE" -gt 2000 ]; then
                 echo "Installed sing-box"
                 opkg install sing-box
             else
@@ -165,76 +165,6 @@ EOF
         fi
         printf "\033[32;1mConfigure route for Sing-box\033[0m\n"
         route_vpn
-    fi
-
-    if [ "$TUNNEL" == 'awg' ]; then
-        printf "\033[32;1mConfigure Amnezia WireGuard\033[0m\n"
-
-        install_awg_packages
-
-        route_vpn
-
-        read -r -p "Enter the private key (from [Interface]):"$'\n' AWG_PRIVATE_KEY
-
-        while true; do
-            read -r -p "Enter internal IP address with subnet, example 192.168.100.5/24 (Address from [Interface]):"$'\n' AWG_IP
-            if echo "$AWG_IP" | egrep -oq '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]+$'; then
-                break
-            else
-                echo "This IP is not valid. Please repeat"
-            fi
-        done
-
-        read -r -p "Enter Jc value (from [Interface]):"$'\n' AWG_JC
-        read -r -p "Enter Jmin value (from [Interface]):"$'\n' AWG_JMIN
-        read -r -p "Enter Jmax value (from [Interface]):"$'\n' AWG_JMAX
-        read -r -p "Enter S1 value (from [Interface]):"$'\n' AWG_S1
-        read -r -p "Enter S2 value (from [Interface]):"$'\n' AWG_S2
-        read -r -p "Enter H1 value (from [Interface]):"$'\n' AWG_H1
-        read -r -p "Enter H2 value (from [Interface]):"$'\n' AWG_H2
-        read -r -p "Enter H3 value (from [Interface]):"$'\n' AWG_H3
-        read -r -p "Enter H4 value (from [Interface]):"$'\n' AWG_H4
-    
-        read -r -p "Enter the public key (from [Peer]):"$'\n' AWG_PUBLIC_KEY
-        read -r -p "If use PresharedKey, Enter this (from [Peer]). If your don't use leave blank:"$'\n' AWG_PRESHARED_KEY
-        read -r -p "Enter Endpoint host without port (Domain or IP) (from [Peer]):"$'\n' AWG_ENDPOINT
-
-        read -r -p "Enter Endpoint host port (from [Peer]) [51820]:"$'\n' AWG_ENDPOINT_PORT
-        AWG_ENDPOINT_PORT=${AWG_ENDPOINT_PORT:-51820}
-        if [ "$AWG_ENDPOINT_PORT" = '51820' ]; then
-            echo $AWG_ENDPOINT_PORT
-        fi
-        
-        uci set network.awg0=interface
-        uci set network.awg0.proto='amneziawg'
-        uci set network.awg0.private_key=$AWG_PRIVATE_KEY
-        uci set network.awg0.listen_port='51820'
-        uci set network.awg0.addresses=$AWG_IP
-
-        uci set network.awg0.awg_jc=$AWG_JC
-        uci set network.awg0.awg_jmin=$AWG_JMIN
-        uci set network.awg0.awg_jmax=$AWG_JMAX
-        uci set network.awg0.awg_s1=$AWG_S1
-        uci set network.awg0.awg_s2=$AWG_S2
-        uci set network.awg0.awg_h1=$AWG_H1
-        uci set network.awg0.awg_h2=$AWG_H2
-        uci set network.awg0.awg_h3=$AWG_H3
-        uci set network.awg0.awg_h4=$AWG_H4
-
-        if ! uci show network | grep -q amneziawg_awg0; then
-            uci add network amneziawg_awg0
-        fi
-
-        uci set network.@amneziawg_awg0[0]=amneziawg_awg0
-        uci set network.@amneziawg_awg0[0].name='awg0_client'
-        uci set network.@amneziawg_awg0[0].public_key=$AWG_PUBLIC_KEY
-        uci set network.@amneziawg_awg0[0].preshared_key=$AWG_PRESHARED_KEY
-        uci set network.@amneziawg_awg0[0].route_allowed_ips='0'
-        uci set network.@amneziawg_awg0[0].persistent_keepalive='25'
-        uci set network.@amneziawg_awg0[0].endpoint_host=$AWG_ENDPOINT
-        uci set network.@amneziawg_awg0[0].allowed_ips='0.0.0.0/0'
-        uci set network.@amneziawg_awg0[0].endpoint_port=$AWG_ENDPOINT_PORT
-        uci commit
     fi
 
 }
