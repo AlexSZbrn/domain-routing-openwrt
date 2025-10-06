@@ -83,7 +83,7 @@ add_tunnel() {
         if grep -q "tun0" /etc/sing-box/config.json; then
         printf "\033[32;1mConfig /etc/sing-box/config.json already exists\033[0m\n"
         else
-cat << 'EOF' > /etc/sing-box/config.json
+
 #{
 #  "log": {
 #    "level": "debug"
@@ -112,6 +112,7 @@ cat << 'EOF' > /etc/sing-box/config.json
 #    "auto_detect_interface": true
 #  }
 #}
+cat << 'EOF' > /etc/sing-box/config.json
 {
     "log": {
       "level": "debug"
