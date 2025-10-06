@@ -8,7 +8,7 @@ check_repo() {
 }
 
 route_vpn () {
-    if[ "$TUNNEL" == singbox ]; then
+    if [ "$TUNNEL" == singbox ]; then
 cat << EOF > /etc/hotplug.d/iface/30-vpnroute
 #!/bin/sh
 
